@@ -1,9 +1,38 @@
 #include "graph.hpp"
+#include <sstream>
 
 using namespace hwcg;
+using size_type = std::size_t;
 
 int main() {
-  std::vector<std::pair<int, int>> a = {{1, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 4}};
-  std::vector<int> b = {1, 2, 3, 4, 5};
-  Graph<int, int> graph{a.begin(), a.end(), b.begin(), b.end()};
+  std::vector<std::pair<size_type, size_type>> edges;
+  std::vector<std::vector<int>> data;
+
+  size_type start, end;
+  int value;
+  std::string line;
+
+  while (std::getline(std::cin, line)) {
+    if (line.empty())
+      continue;
+
+    std::istringstream iss(line);
+    std::string token;
+
+    std::getline(iss, token, '-');
+    start = std::stoi(token);
+
+    std::getline(iss, token, '-');
+
+    std::getline(iss, token, ',');
+    end = std::stoi(token);
+
+    std::getline(iss, token);
+    value = std::stoi(token);
+
+    edges.emplace_back(start, end);
+    data.emplace_back(std::vector<int>{value, value, value});
+  }
+
+  Graph<int, int> graph{edges.begin(), edges.end(), data.begin(), data.end()};
 }
