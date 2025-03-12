@@ -6,7 +6,7 @@ using size_type = std::size_t;
 
 int main() {
   std::vector<std::pair<size_type, size_type>> edges;
-  std::vector<std::vector<int>> data;
+  std::vector<int> data;
 
   size_type start, end;
   int value;
@@ -31,7 +31,7 @@ int main() {
     value = std::stoi(token);
 
     edges.emplace_back(start, end);
-    data.emplace_back(std::vector<int>{value, value, value});
+    data.emplace_back(value);
   }
 
   Graph<int, int> graph{edges.begin(), edges.end(), data.begin(), data.end()};

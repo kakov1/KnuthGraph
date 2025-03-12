@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <utility>
@@ -25,6 +26,8 @@ private:
 
     explicit Vertex(size_type num, const VrtxType &data = VrtxType{})
         : num_(num), data_(data) {}
+
+    std::string to_string() const { return std::to_string(num_); }
   };
 
   struct Edge final {
@@ -34,6 +37,8 @@ private:
     explicit Edge(size_type num, size_type start, size_type end,
                   const EdgeType &data = EdgeType{})
         : num_(num), start_(start), end_(end), data_(data) {}
+
+    std::string to_string() const { return std::to_string(num_); }
   };
 
   class GraphIt final {
@@ -93,6 +98,25 @@ private:
     return cur;
   }
 
+  void add_new_vrtx(size_type pos) {
+    if (table_[0][pos - 1].index() == 0)
+      table_[0][pos - 1] = Vertex{pos};
+  }
+
+  void add_new_edge(size_type pos, size_type start, size_type end,
+                    const EdgeType &data) {
+    table_[0][pos] = Edge{pos, start, end, data};
+    table_[0][pos + 1] = Edge{pos + 1, start, end, data};
+
+    table_[1][pos] = start;
+    table_[1][pos + 1] = end;
+  }
+
+  void set_new_refs(size_type vrtx, size_type edge) {
+    table_[2][find_place_for_new_edge(vrtx - 1)] = edge;
+    table_[2][edge] = vrtx - 1;
+  }
+
 public:
   template <typename EdgeIter, typename DataIter>
   Graph(EdgeIter start_edge, EdgeIter end_edge, DataIter start_data,
@@ -115,33 +139,13 @@ public:
          ++start_edge, ++start_data, edge_cur += edge_table_size_) {
       auto [start_num, end_num] = *start_edge;
 
-      if (table_[0][start_num - 1].index() == 0) {
-        if (start_data->size() == 3)
-          table_[0][start_num - 1] = Vertex{start_num, (*start_data)[0]};
-        else
-          table_[0][start_num - 1] = Vertex{start_num};
-      }
+      add_new_vrtx(start_num);
+      add_new_vrtx(end_num);
 
-      if (table_[0][end_num - 1].index() == 0) {
-        if (start_data->size() == 3)
-          table_[0][end_num - 1] = Vertex{end_num, (*start_data)[0]};
-        else
-          table_[0][end_num - 1] = Vertex{end_num};
-      }
+      add_new_edge(edge_cur, start_num, end_num, *start_data);
 
-      table_[0][edge_cur] =
-          Edge{edge_cur, start_num, end_num, (*start_data)[2]};
-      table_[0][edge_cur + 1] =
-          Edge{edge_cur + 1, start_num, end_num, (*start_data)[2]};
-
-      table_[1][edge_cur] = start_num;
-      table_[1][edge_cur + 1] = end_num;
-
-      table_[2][find_place_for_new_edge(start_num - 1)] = edge_cur;
-      table_[2][edge_cur] = start_num - 1;
-
-      table_[2][find_place_for_new_edge(end_num - 1)] = edge_cur + 1;
-      table_[2][edge_cur + 1] = end_num - 1;
+      set_new_refs(start_num, edge_cur);
+      set_new_refs(end_num, edge_cur + 1);
     }
 
     std::cout << *this;
@@ -151,45 +155,36 @@ public:
   size_type get_edge_num() const { return edge_num_; }
   size_type get_vrtx_num() const { return vrtx_num_; }
   size_type get_table_cols_num() const { return table_cols_num; }
+
+  void print(std::ostream &os) const {
+    auto table_cell_size = std::to_string(table_cols_num).length();
+
+    for (auto &&line : table_) {
+      for (auto &&elem : line) {
+        std::visit(
+            [&os, table_cell_size](const auto &value) {
+              if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
+                                           Vertex> ||
+                            std::is_same_v<std::decay_t<decltype(value)>,
+                                           Edge>) {
+                os << std::left << std::setw(table_cell_size + 1)
+                   << value.to_string();
+              } else {
+                os << std::left << std::setw(table_cell_size + 1) << value;
+              }
+            },
+            elem);
+      }
+      os << std::endl;
+    }
+  }
 };
 
-std::size_t get_num_size(std::size_t num) {
-  return std::to_string(num).length();
-}
-
 template <typename VrtxType, typename EdgeType>
-std::ostream &operator<<(std::ostream &stream,
+std::ostream &operator<<(std::ostream &os,
                          const Graph<VrtxType, EdgeType> &graph) {
-  auto table = graph.get_table();
-  auto table_cell_size = get_num_size(graph.get_table_cols_num());
+  graph.print(os);
 
-  for (auto &&line : table) {
-    for (auto &&elem : line) {
-      switch (elem.index()) {
-      case 0:
-        stream << std::get<0>(elem)
-               << std::string(table_cell_size -
-                                  get_num_size(std::get<0>(elem)) + 1,
-                              ' ');
-        break;
-      case 1:
-        stream << std::get<1>(elem).num_
-               << std::string(table_cell_size -
-                                  get_num_size(std::get<1>(elem).num_) + 1,
-                              ' ');
-        break;
-      case 2:
-        stream << std::get<2>(elem).num_
-               << std::string(table_cell_size -
-                                  get_num_size(std::get<2>(elem).num_) + 1,
-                              ' ');
-        break;
-      }
-    }
-
-    stream << std::endl;
-  }
-
-  return stream;
+  return os;
 }
 } // namespace hwcg
