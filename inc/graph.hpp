@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -21,6 +22,7 @@ private:
 
 private:
   graph_table table_{4, std::vector<table_elem>{}};
+  static constexpr size_type a = 0, t = 1, n = 2, p = 3;
 
   size_type vrtx_num_ = 0;
   size_type edge_num_ = 0;
@@ -29,6 +31,8 @@ private:
   size_type table_cols_num;
 
 private:
+  enum class Color { White, Blue, Red };
+
   struct Vertex final {
     size_type num_;
     VrtxType data_;
@@ -73,6 +77,33 @@ private:
     Graph &graph_;
     pointer ptr_;
 
+    GraphIt &advance(size_type row, int n) {
+      auto &table = graph_.table_;
+      auto edge_num =
+          std::get<size_type>(table[row][std::get<Edge>(*ptr_).num_]);
+
+      if (n >= 0) {
+        if (edge_num + 1 == graph_.vrtx_num_) {
+          ptr_ = std::addressof(*table[graph_.a].end());
+
+          return *this;
+        }
+      } else {
+        if (edge_num == 0) {
+          ptr_ = std::addressof(*table[graph_.a].rend());
+
+          return *this;
+        }
+      }
+
+      if (edge_num < graph_.vrtx_num_)
+        edge_num = std::get<size_type>(table[row][edge_num + n]);
+
+      ptr_ = std::addressof(table[graph_.a][edge_num]);
+
+      return *this;
+    }
+
   public:
     GraphIt(Graph &graph, pointer ptr = nullptr) : graph_(graph), ptr_(ptr) {}
 
@@ -80,24 +111,7 @@ private:
 
     GraphIt &operator=(const GraphIt &rhs) = default;
 
-    GraphIt &operator++() {
-      auto next_edge_num =
-          std::get<size_type>(graph_.table_[2][std::get<Edge>(*ptr_).num_]);
-
-      if (next_edge_num + 1 == graph_.vrtx_num_) {
-        ptr_ = std::addressof(*graph_.table_[0].end());
-
-        return *this;
-      }
-
-      if (next_edge_num < graph_.vrtx_num_)
-        next_edge_num =
-            std::get<size_type>(graph_.table_[2][next_edge_num + 1]);
-
-      ptr_ = std::addressof(graph_.table_[0][next_edge_num]);
-
-      return *this;
-    }
+    GraphIt &operator++() { return advance(graph_.n, 1); }
 
     GraphIt operator++(int) {
       auto tmp{*this};
@@ -106,9 +120,14 @@ private:
       return tmp;
     }
 
-    GraphIt &operator--() {}
+    GraphIt &operator--() { return advance(graph_.p, -1); }
 
-    GraphIt operator--(int) {}
+    GraphIt operator--(int) {
+      auto tmp{*this};
+      --*this;
+
+      return tmp;
+    }
 
     GraphIt &operator+=(size_type num) {
       while (num-- > 0)
@@ -146,31 +165,31 @@ private:
   }
 
   size_type find_place_for_new_edge(size_type pos) const {
-    auto cur = std::get<size_type>(table_[2][pos]);
+    auto cur = std::get<size_type>(table_[n][pos]);
 
-    while (std::get<size_type>(table_[2][cur]) != pos)
-      cur = std::get<size_type>(table_[2][cur]);
+    while (std::get<size_type>(table_[n][cur]) != pos)
+      cur = std::get<size_type>(table_[n][cur]);
 
     return cur;
   }
 
   void add_new_vrtx(size_type pos) {
-    if (table_[0][pos - 1].index() == 0)
-      table_[0][pos - 1] = Vertex{pos};
+    if (table_[a][pos - 1].index() == 0)
+      table_[a][pos - 1] = Vertex{pos};
   }
 
   void add_new_edge(size_type pos, size_type start, size_type end,
                     const EdgeType &data) {
-    table_[0][pos] = Edge{pos, start, end, data};
-    table_[0][pos + 1] = Edge{pos + 1, start, end, data};
+    table_[a][pos] = Edge{pos, start, end, data};
+    table_[a][pos + 1] = Edge{pos + 1, end, start, data};
 
-    table_[1][pos] = start;
-    table_[1][pos + 1] = end;
+    table_[t][pos] = start;
+    table_[t][pos + 1] = end;
   }
 
   void set_new_refs(size_type vrtx, size_type edge) {
-    table_[2][find_place_for_new_edge(vrtx - 1)] = edge;
-    table_[2][edge] = vrtx - 1;
+    table_[n][find_place_for_new_edge(vrtx - 1)] = edge;
+    table_[n][edge] = vrtx - 1;
   }
 
   std::vector<size_type> get_direct_order(size_type vrtx_num) const {
@@ -179,7 +198,7 @@ private:
 
     do {
       direct_order.push_back(vrtx_num);
-      vrtx_num = std::get<size_type>(table_[2][vrtx_num]);
+      vrtx_num = std::get<size_type>(table_[n][vrtx_num]);
     } while (vrtx_num >= vrtx_num_);
 
     return direct_order;
@@ -191,12 +210,46 @@ private:
     for (auto vrtx = 0; vrtx < vrtx_num_; ++vrtx) {
       direct_order = get_direct_order(vrtx);
 
-      table_[3][direct_order.front()] = direct_order.back();
+      table_[p][direct_order.front()] = direct_order.back();
 
       for (auto edge = direct_order.size() - 1; edge > 0; --edge) {
-        table_[3][direct_order[edge]] = direct_order[edge - 1];
+        table_[p][direct_order[edge]] = direct_order[edge - 1];
       }
     }
+  }
+
+  bool dfs(size_type vrtx, Color color,
+           std::unordered_map<size_type, Color> &colors) {
+    if (colors[vrtx] == color) {
+      return false;
+    }
+
+    colors[vrtx] = color == Color::Blue ? Color::Red : Color::Blue;
+
+    GraphIt outgoing_edge = GraphIt{
+        *this, std::addressof(table_[a][std::get<size_type>(table_[n][vrtx])])};
+
+    while (outgoing_edge->start_ >= outgoing_edge->end_) {
+
+      ++outgoing_edge;
+      if (outgoing_edge == end()) {
+        return false;
+      }
+    }
+
+    while (outgoing_edge->start_ - 1 == vrtx) {      
+      if (colors[outgoing_edge->end_ - 1] == Color::White) {
+        dfs(outgoing_edge->end_ - 1, colors[vrtx], colors);
+      } 
+      else {
+        if (colors[outgoing_edge->end_ - 1] == colors[vrtx]) {
+          return false;
+        }
+      }
+      ++outgoing_edge;
+    }
+
+    return true;
   }
 
 public:
@@ -212,7 +265,7 @@ public:
     }
 
     for (size_type i = 0; i < vrtx_num_; ++i) {
-      table_[2][i] = i;
+      table_[n][i] = i;
     }
 
     size_type edge_cur = vrtx_num_;
@@ -241,10 +294,27 @@ public:
   size_type get_table_cols_num() const { return table_cols_num; }
 
   GraphIt begin() {
-    return GraphIt{*this, std::addressof(table_[0][vrtx_num_])};
+    return GraphIt{*this, std::addressof(table_[a][vrtx_num_])};
   }
 
-  GraphIt end() { return GraphIt{*this, std::addressof(*table_[0].end())}; }
+  GraphIt end() { return GraphIt{*this, std::addressof(*table_[a].end())}; }
+
+  bool color_vrts() {
+    std::unordered_map<size_type, Color> colors;
+
+    for (size_type key = 0; key < vrtx_num_; ++key) {
+      colors[key] = Color::White;
+    }
+
+    dfs(std::get<Vertex>(table_[a][0]).num_ - 1, Color::Red, colors);
+
+    for (auto &&pair : colors) {
+      std::cout << pair.first << ":" << static_cast<int>(pair.second)
+                << std::endl;
+    }
+
+    return 1;
+  }
 
   void print(std::ostream &os) const {
     auto table_cell_size = std::to_string(table_cols_num).length();

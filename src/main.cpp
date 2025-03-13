@@ -43,6 +43,8 @@ int main() {
     std::cout << std::get<2>(it).num_ << std::endl;
     //beg++;
   }
+  
+  graph.color_vrts();
 
-  std::cout << graph;
+  //std::cout << graph;
 }
