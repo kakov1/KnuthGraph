@@ -20,6 +20,15 @@ private:
   using graph_table = std::vector<std::vector<table_elem>>;
 
 private:
+  graph_table table_{4, std::vector<table_elem>{}};
+
+  size_type vrtx_num_ = 0;
+  size_type edge_num_ = 0;
+
+  size_type edge_table_size_ = 2;
+  size_type table_cols_num;
+
+private:
   struct Vertex final {
     size_type num_;
     VrtxType data_;
@@ -42,43 +51,90 @@ private:
   };
 
   class GraphIt final {
-  private:
-    class Proxy;
-
-  private:
-    using iterator_category = std::bidirectional_iterator_tag;
+  public:
+    using iterator_category = std::random_access_iterator_tag;
     using difference_type = std::ptrdiff_t;
     using value_type = table_elem;
-    using reference = table_elem &;
-    using pointer = table_elem *;
-
-    pointer current_;
+    using pointer = value_type *;
+    using const_pointer = const pointer;
+    using reference = value_type &;
+    using const_reference = const reference;
 
   private:
     class Proxy final {
     private:
-      reference ref_;
+      pointer ptr_;
 
     public:
-      Proxy() = default;
-      pointer operator->() { return std::addressof(ref_); }
+      Proxy(pointer ptr) : ptr_(ptr) {}
+      Edge *operator->() { return std::addressof(std::get<Edge>(*ptr_)); }
     };
 
-  public:
-    GraphIt(pointer ptr = nullptr) : current_(ptr) {}
+    Graph &graph_;
+    pointer ptr_;
 
-    GraphIt &operator++() {}
+  public:
+    GraphIt(Graph &graph, pointer ptr = nullptr) : graph_(graph), ptr_(ptr) {}
+
+    GraphIt(const GraphIt &rhs) = default;
+
+    GraphIt &operator=(const GraphIt &rhs) = default;
+
+    GraphIt &operator++() {
+      auto next_edge_num =
+          std::get<size_type>(graph_.table_[2][std::get<Edge>(*ptr_).num_]);
+
+      if (next_edge_num + 1 == graph_.vrtx_num_) {
+        ptr_ = std::addressof(*graph_.table_[0].end());
+
+        return *this;
+      }
+
+      if (next_edge_num < graph_.vrtx_num_)
+        next_edge_num =
+            std::get<size_type>(graph_.table_[2][next_edge_num + 1]);
+
+      ptr_ = std::addressof(graph_.table_[0][next_edge_num]);
+
+      return *this;
+    }
+
+    GraphIt operator++(int) {
+      auto tmp{*this};
+      ++*this;
+
+      return tmp;
+    }
+
+    GraphIt &operator--() {}
+
+    GraphIt operator--(int) {}
+
+    GraphIt &operator+=(size_type num) {
+      while (num-- > 0)
+        ++(*this);
+
+      return *this;
+    }
+
+    GraphIt operator+(size_type num) const {
+      auto tmp{*this};
+
+      tmp += num;
+
+      return tmp;
+    }
+
+    bool operator==(const GraphIt &rhs) const { return ptr_ == rhs.ptr_; }
+
+    bool operator!=(const GraphIt &rhs) const { return !(*this == rhs); }
+
+    value_type operator*() const { return value_type{*ptr_}; }
+
+    Proxy operator->() const { return Proxy{ptr_}; }
   };
 
 private:
-  graph_table table_{4, std::vector<table_elem>{}};
-
-  size_type vrtx_num_ = 0;
-  size_type edge_num_ = 0;
-
-  size_type edge_table_size_ = 2;
-  size_type table_cols_num;
-
   template <typename EdgeIter>
   size_type find_max_vrtx(EdgeIter start_edge, EdgeIter end_edge) const {
     auto max_value = std::max_element(
@@ -117,6 +173,32 @@ private:
     table_[2][edge] = vrtx - 1;
   }
 
+  std::vector<size_type> get_direct_order(size_type vrtx_num) const {
+    std::vector<size_type> direct_order;
+    direct_order.reserve(table_cols_num);
+
+    do {
+      direct_order.push_back(vrtx_num);
+      vrtx_num = std::get<size_type>(table_[2][vrtx_num]);
+    } while (vrtx_num >= vrtx_num_);
+
+    return direct_order;
+  }
+
+  void set_reverse_orders() {
+    std::vector<size_type> direct_order;
+
+    for (auto vrtx = 0; vrtx < vrtx_num_; ++vrtx) {
+      direct_order = get_direct_order(vrtx);
+
+      table_[3][direct_order.front()] = direct_order.back();
+
+      for (auto edge = direct_order.size() - 1; edge > 0; --edge) {
+        table_[3][direct_order[edge]] = direct_order[edge - 1];
+      }
+    }
+  }
+
 public:
   template <typename EdgeIter, typename DataIter>
   Graph(EdgeIter start_edge, EdgeIter end_edge, DataIter start_data,
@@ -149,12 +231,20 @@ public:
     }
 
     std::cout << *this;
+
+    set_reverse_orders();
   }
 
   const graph_table &get_table() const { return table_; }
   size_type get_edge_num() const { return edge_num_; }
   size_type get_vrtx_num() const { return vrtx_num_; }
   size_type get_table_cols_num() const { return table_cols_num; }
+
+  GraphIt begin() {
+    return GraphIt{*this, std::addressof(table_[0][vrtx_num_])};
+  }
+
+  GraphIt end() { return GraphIt{*this, std::addressof(*table_[0].end())}; }
 
   void print(std::ostream &os) const {
     auto table_cell_size = std::to_string(table_cols_num).length();
