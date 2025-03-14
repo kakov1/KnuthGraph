@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <stack>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -106,6 +107,9 @@ private:
 
   public:
     GraphIt(Graph &graph, pointer ptr = nullptr) : graph_(graph), ptr_(ptr) {}
+
+    GraphIt(Graph &graph, size_type col)
+        : graph_(graph), ptr_(std::addressof(graph.table_[a][col])) {}
 
     GraphIt(const GraphIt &rhs) = default;
 
@@ -218,35 +222,73 @@ private:
     }
   }
 
-  bool dfs(size_type vrtx, Color color,
-           std::unordered_map<size_type, Color> &colors) {
-    if (colors[vrtx] == color) {
-      return false;
+  bool dfs(size_type vrtx, std::unordered_map<size_type, Color> &colors) {
+    std::stack<std::pair<size_type, GraphIt>> stack;
+    stack.emplace(vrtx, GraphIt{*this, std::get<size_type>(table_[n][vrtx])});
+
+    auto color = Color::Blue;
+    colors[vrtx] = color;
+
+    while (!stack.empty()) {
+      size_type cur_vrtx = stack.top().first;
+      GraphIt *outgoing_edge = &stack.top().second;
+      stack.pop();
+
+      while (*outgoing_edge != end() &&
+             (*outgoing_edge)->start_ - 1 == cur_vrtx) {
+
+        if (colors[(*outgoing_edge)->end_ - 1] == Color::White) {
+          cur_vrtx = (*outgoing_edge)->end_ - 1;
+
+          stack.emplace(cur_vrtx, GraphIt{*this, std::get<size_type>(
+                                                     table_[n][cur_vrtx])});
+          outgoing_edge = &stack.top().second;
+          colors[cur_vrtx] = color == Color::Blue ? Color::Red : Color::Blue;
+          color = colors[cur_vrtx];
+
+          break;
+        } else {
+          if (colors[(*outgoing_edge)->end_ - 1] == colors[cur_vrtx]) {
+            return false;
+          }
+        }
+
+        ++*outgoing_edge;
+      }
     }
 
-    colors[vrtx] = color == Color::Blue ? Color::Red : Color::Blue;
+    return true;
+  }
 
-    GraphIt outgoing_edge = GraphIt{
-        *this, std::addressof(table_[a][std::get<size_type>(table_[n][vrtx])])};
+  bool bfs(size_type start_vrtx, std::unordered_map<size_type, Color> &colors) {
+    std::stack<std::pair<size_type, Color>> stack;
+    stack.push({start_vrtx, Color::Blue});
 
-    while (outgoing_edge->start_ >= outgoing_edge->end_) {
+    while (!stack.empty()) {
+      auto [vrtx, color] = stack.top();
+      stack.pop();
 
-      ++outgoing_edge;
-      if (outgoing_edge == end()) {
+      if (colors[vrtx] == color) {
         return false;
       }
-    }
 
-    while (outgoing_edge->start_ - 1 == vrtx) {      
-      if (colors[outgoing_edge->end_ - 1] == Color::White) {
-        dfs(outgoing_edge->end_ - 1, colors[vrtx], colors);
-      } 
-      else {
-        if (colors[outgoing_edge->end_ - 1] == colors[vrtx]) {
-          return false;
+      colors[vrtx] = color == Color::Blue ? Color::Red : Color::Blue;
+
+      GraphIt outgoing_edge{*this, std::get<size_type>(table_[n][vrtx])};
+
+      while (outgoing_edge != end() && outgoing_edge->start_ - 1 == vrtx) {
+        size_type neighbor = outgoing_edge->end_ - 1;
+
+        if (colors[neighbor] == Color::White) {
+          stack.push({neighbor, colors[vrtx]});
+        } else {
+          if (colors[neighbor] == colors[vrtx]) {
+            return false;
+          }
         }
+
+        ++outgoing_edge;
       }
-      ++outgoing_edge;
     }
 
     return true;
@@ -283,8 +325,6 @@ public:
       set_new_refs(end_num, edge_cur + 1);
     }
 
-    std::cout << *this;
-
     set_reverse_orders();
   }
 
@@ -293,27 +333,34 @@ public:
   size_type get_vrtx_num() const { return vrtx_num_; }
   size_type get_table_cols_num() const { return table_cols_num; }
 
-  GraphIt begin() {
-    return GraphIt{*this, std::addressof(table_[a][vrtx_num_])};
-  }
+  GraphIt begin() { return GraphIt{*this, vrtx_num_}; }
 
   GraphIt end() { return GraphIt{*this, std::addressof(*table_[a].end())}; }
 
-  bool color_vrts() {
+  std::string color_vrts() {
     std::unordered_map<size_type, Color> colors;
 
     for (size_type key = 0; key < vrtx_num_; ++key) {
       colors[key] = Color::White;
     }
 
-    dfs(std::get<Vertex>(table_[a][0]).num_ - 1, Color::Red, colors);
+    std::string ans;
 
-    for (auto &&pair : colors) {
-      std::cout << pair.first << ":" << static_cast<int>(pair.second)
-                << std::endl;
+    if (dfs(std::get<Vertex>(table_[a][0]).num_ - 1, colors)) {
+      for (size_type key = 1; key <= vrtx_num_; ++key) {
+        ans += std::to_string(key) + " ";
+
+        if (colors[key] == Color::Blue) {
+          ans += "b ";
+        } else {
+          ans += "r ";
+        }
+      }
+    } else {
+      ans = "Isn't bipartite";
     }
 
-    return 1;
+    return ans;
   }
 
   void print(std::ostream &os) const {

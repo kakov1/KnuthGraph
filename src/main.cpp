@@ -36,15 +36,15 @@ int main() {
 
   Graph<int, int> graph{edges.begin(), edges.end(), data.begin(), data.end()};
 
-  auto beg = graph.begin();
-  std::advance(beg, 5);
-  std::cout << beg->to_string()<<std::endl;
-  for (auto &&it: graph) {
-    std::cout << std::get<2>(it).num_ << std::endl;
+  //auto beg = graph.begin();
+  //std::advance(beg, 5);
+  //std::cout << beg->to_string()<<std::endl;
+  //for (auto &&it: graph) {
+    //std::cout << std::get<2>(it).num_ << std::endl;
     //beg++;
-  }
+  //}
   
-  graph.color_vrts();
+  std::cout << graph.color_vrts()<<std::endl;
 
   //std::cout << graph;
 }
