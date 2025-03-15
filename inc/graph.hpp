@@ -11,8 +11,9 @@
 #include <vector>
 
 namespace hwcg {
-template <typename VrtxType, typename EdgeType> class Graph final {
+template <typename VrtxT, typename EdgeT> class Graph final {
 private:
+  enum class Color;
   struct Vertex;
   struct Edge;
 
@@ -20,6 +21,7 @@ private:
   using size_type = std::size_t;
   using table_elem = std::variant<size_type, Vertex, Edge>;
   using graph_table = std::vector<std::vector<table_elem>>;
+  using colors_map = std::unordered_map<size_type, Color>;
 
 private:
   graph_table table_{4, std::vector<table_elem>{}};
@@ -36,9 +38,9 @@ private:
 
   struct Vertex final {
     size_type num_;
-    VrtxType data_;
+    VrtxT data_;
 
-    explicit Vertex(size_type num, const VrtxType &data = VrtxType{})
+    explicit Vertex(size_type num, const VrtxT &data = VrtxT{})
         : num_(num), data_(data) {}
 
     std::string to_string() const { return std::to_string(num_); }
@@ -46,10 +48,10 @@ private:
 
   struct Edge final {
     size_type num_, start_, end_;
-    EdgeType data_;
+    EdgeT data_;
 
     explicit Edge(size_type num, size_type start, size_type end,
-                  const EdgeType &data = EdgeType{})
+                  const EdgeT &data = EdgeT{})
         : num_(num), start_(start), end_(end), data_(data) {}
 
     std::string to_string() const { return std::to_string(num_); }
@@ -97,8 +99,8 @@ private:
         }
       }
 
-      if (edge_num < graph_.vrtx_num_)
-        edge_num = std::get<size_type>(table[row][edge_num + n]);
+      while (edge_num < graph_.vrtx_num_)
+        edge_num = std::get<size_type>(table[row][++edge_num]);
 
       ptr_ = std::addressof(table[graph_.a][edge_num]);
 
@@ -158,8 +160,8 @@ private:
   };
 
 private:
-  template <typename EdgeIter>
-  size_type find_max_vrtx(EdgeIter start_edge, EdgeIter end_edge) const {
+  template <typename EdgeIt>
+  size_type find_max_vrtx(EdgeIt start_edge, EdgeIt end_edge) const {
     auto max_value = std::max_element(
         start_edge, end_edge, [](const auto &a, const auto &b) {
           return std::max(a.first, a.second) < std::max(b.first, b.second);
@@ -183,7 +185,7 @@ private:
   }
 
   void add_new_edge(size_type pos, size_type start, size_type end,
-                    const EdgeType &data) {
+                    const EdgeT &data) {
     table_[a][pos] = Edge{pos, start, end, data};
     table_[a][pos + 1] = Edge{pos + 1, end, start, data};
 
@@ -222,31 +224,34 @@ private:
     }
   }
 
-  bool dfs(size_type vrtx, std::unordered_map<size_type, Color> &colors) {
+  bool dfs(size_type vrtx, colors_map &colors) {
     std::stack<std::pair<size_type, GraphIt>> stack;
     stack.emplace(vrtx, GraphIt{*this, std::get<size_type>(table_[n][vrtx])});
 
-    auto color = Color::Blue;
-    colors[vrtx] = color;
+    colors[vrtx] = Color::Blue;
 
     while (!stack.empty()) {
       size_type cur_vrtx = stack.top().first;
       GraphIt *outgoing_edge = &stack.top().second;
-      stack.pop();
+      if (*outgoing_edge == end() || (*outgoing_edge)->start_ - 1 != cur_vrtx)
+        stack.pop();
 
       while (*outgoing_edge != end() &&
              (*outgoing_edge)->start_ - 1 == cur_vrtx) {
-
         if (colors[(*outgoing_edge)->end_ - 1] == Color::White) {
+          vrtx = cur_vrtx;
           cur_vrtx = (*outgoing_edge)->end_ - 1;
+
+          ++*outgoing_edge;
 
           stack.emplace(cur_vrtx, GraphIt{*this, std::get<size_type>(
                                                      table_[n][cur_vrtx])});
           outgoing_edge = &stack.top().second;
-          colors[cur_vrtx] = color == Color::Blue ? Color::Red : Color::Blue;
-          color = colors[cur_vrtx];
+          colors[cur_vrtx] =
+              colors[vrtx] == Color::Blue ? Color::Red : Color::Blue;
 
           break;
+
         } else {
           if (colors[(*outgoing_edge)->end_ - 1] == colors[cur_vrtx]) {
             return false;
@@ -260,7 +265,7 @@ private:
     return true;
   }
 
-  bool bfs(size_type start_vrtx, std::unordered_map<size_type, Color> &colors) {
+  bool bfs(size_type start_vrtx, colors_map &colors) {
     std::stack<std::pair<size_type, Color>> stack;
     stack.push({start_vrtx, Color::Blue});
 
@@ -295,9 +300,9 @@ private:
   }
 
 public:
-  template <typename EdgeIter, typename DataIter>
-  Graph(EdgeIter start_edge, EdgeIter end_edge, DataIter start_data,
-        DataIter end_data) {
+  template <typename EdgeIt, typename DataIt>
+  Graph(EdgeIt start_edge, EdgeIt end_edge, DataIt start_data,
+        DataIt end_data) {
     edge_num_ = end_edge - start_edge;
     vrtx_num_ = find_max_vrtx(start_edge, end_edge);
     table_cols_num = vrtx_num_ + edge_num_ * edge_table_size_;
@@ -328,17 +333,8 @@ public:
     set_reverse_orders();
   }
 
-  const graph_table &get_table() const { return table_; }
-  size_type get_edge_num() const { return edge_num_; }
-  size_type get_vrtx_num() const { return vrtx_num_; }
-  size_type get_table_cols_num() const { return table_cols_num; }
-
-  GraphIt begin() { return GraphIt{*this, vrtx_num_}; }
-
-  GraphIt end() { return GraphIt{*this, std::addressof(*table_[a].end())}; }
-
-  std::string color_vrts() {
-    std::unordered_map<size_type, Color> colors;
+  std::string is_bipartite() {
+    colors_map colors;
 
     for (size_type key = 0; key < vrtx_num_; ++key) {
       colors[key] = Color::White;
@@ -346,14 +342,16 @@ public:
 
     std::string ans;
 
-    if (dfs(std::get<Vertex>(table_[a][0]).num_ - 1, colors)) {
+    if (dfs(0, colors)) {
       for (size_type key = 1; key <= vrtx_num_; ++key) {
-        ans += std::to_string(key) + " ";
+        if (colors[key - 1] != Color::White) {
+          ans += std::to_string(key) + " ";
 
-        if (colors[key] == Color::Blue) {
-          ans += "b ";
-        } else {
-          ans += "r ";
+          if (colors[key - 1] == Color::Blue) {
+            ans += "b ";
+          } else {
+            ans += "r ";
+          }
         }
       }
     } else {
@@ -385,11 +383,17 @@ public:
       os << std::endl;
     }
   }
+
+  size_type get_edge_num() const { return edge_num_; }
+  size_type get_vrtx_num() const { return vrtx_num_; }
+  size_type get_table_cols_num() const { return table_cols_num; }
+
+  GraphIt begin() { return GraphIt{*this, vrtx_num_}; }
+  GraphIt end() { return GraphIt{*this, std::addressof(*table_[a].end())}; }
 };
 
-template <typename VrtxType, typename EdgeType>
-std::ostream &operator<<(std::ostream &os,
-                         const Graph<VrtxType, EdgeType> &graph) {
+template <typename VrtxT, typename EdgeT>
+std::ostream &operator<<(std::ostream &os, const Graph<VrtxT, EdgeT> &graph) {
   graph.print(os);
 
   return os;
