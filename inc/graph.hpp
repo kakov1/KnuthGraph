@@ -63,22 +63,22 @@ private:
     using difference_type = std::ptrdiff_t;
     using value_type = table_elem;
     using pointer = value_type *;
-    using const_pointer = const pointer;
+    using const_pointer = const value_type *;
     using reference = value_type &;
-    using const_reference = const reference;
+    using const_reference = const value_type &;
 
   private:
     class Proxy final {
     private:
-      pointer ptr_;
+      const_pointer ptr_;
 
     public:
-      Proxy(pointer ptr) : ptr_(ptr) {}
-      Edge *operator->() { return std::addressof(std::get<Edge>(*ptr_)); }
+      Proxy(const_pointer ptr) : ptr_(ptr) {}
+      const Edge *operator->() const { return std::addressof(std::get<Edge>(*ptr_)); }
     };
 
-    Graph &graph_;
-    pointer ptr_;
+    const Graph &graph_;
+    const_pointer ptr_;
 
     GraphIt &advance(size_type row, int n) {
       auto &table = graph_.table_;
@@ -108,9 +108,10 @@ private:
     }
 
   public:
-    GraphIt(Graph &graph, pointer ptr = nullptr) : graph_(graph), ptr_(ptr) {}
+    GraphIt(const Graph &graph, const_pointer ptr = nullptr)
+        : graph_(graph), ptr_(ptr) {}
 
-    GraphIt(Graph &graph, size_type col)
+    GraphIt(const Graph &graph, size_type col)
         : graph_(graph), ptr_(std::addressof(graph.table_[a][col])) {}
 
     GraphIt(const GraphIt &rhs) = default;
@@ -224,7 +225,7 @@ private:
     }
   }
 
-  bool dfs(size_type vrtx, colors_map &colors) {
+  bool dfs(size_type vrtx, colors_map &colors) const {
     std::stack<std::pair<size_type, GraphIt>> stack;
     stack.emplace(vrtx, GraphIt{*this, std::get<size_type>(table_[n][vrtx])});
 
@@ -246,7 +247,6 @@ private:
 
           stack.emplace(cur_vrtx, GraphIt{*this, std::get<size_type>(
                                                      table_[n][cur_vrtx])});
-          outgoing_edge = &stack.top().second;
           colors[cur_vrtx] =
               colors[vrtx] == Color::Blue ? Color::Red : Color::Blue;
 
@@ -265,7 +265,7 @@ private:
     return true;
   }
 
-  bool bfs(size_type start_vrtx, colors_map &colors) {
+  bool bfs(size_type start_vrtx, colors_map &colors) const {
     std::stack<std::pair<size_type, Color>> stack;
     stack.push({start_vrtx, Color::Blue});
 
@@ -333,7 +333,7 @@ public:
     set_reverse_orders();
   }
 
-  std::string is_bipartite() {
+  std::string is_bipartite() const {
     colors_map colors;
 
     for (size_type key = 0; key < vrtx_num_; ++key) {
@@ -388,8 +388,10 @@ public:
   size_type get_vrtx_num() const { return vrtx_num_; }
   size_type get_table_cols_num() const { return table_cols_num; }
 
-  GraphIt begin() { return GraphIt{*this, vrtx_num_}; }
-  GraphIt end() { return GraphIt{*this, std::addressof(*table_[a].end())}; }
+  GraphIt begin() const { return GraphIt{*this, vrtx_num_}; }
+  GraphIt end() const {
+    return GraphIt{*this, std::addressof(*table_[a].end())};
+  }
 };
 
 template <typename VrtxT, typename EdgeT>
