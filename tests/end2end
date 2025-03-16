@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+
+GRAPH="../build/src/main"
+
+IN_DIR="in"
+OUT_DIR="out"
+
+run_test() {
+    local in_file="$1"
+    local out_file="$2"
+
+    echo "Running test: $in_file"
+
+    if diff -u "$out_file" <($GRAPH < "$in_file"); then
+        echo "Test passed: $in_file"
+    else
+        echo "Test failed: $in_file"
+        return 1
+    fi
+}
+
+for in_file in "$IN_DIR"/*.in; do
+    tmp_file="${in_file#in/}"
+    out_file="$OUT_DIR/${tmp_file%.in}.out"
+    if ! run_test "$in_file" "$out_file"; then
+        exit 1
+    fi
+done
+
+echo "All tests passed!"
