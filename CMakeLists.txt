@@ -7,7 +7,7 @@ include(CTest)
 include(GoogleTest)
 
 find_package(GTest REQUIRED)    
-find_package(Boost REQUIRED)   
+find_package(Boost REQUIRED COMPONENTS program_options)
 
 add_subdirectory(src)
 add_subdirectory(tests)

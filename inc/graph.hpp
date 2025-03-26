@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <numeric>
 #include <stack>
 #include <unordered_map>
 #include <utility>
@@ -74,7 +75,9 @@ private:
 
     public:
       Proxy(const_pointer ptr) : ptr_(ptr) {}
-      const Edge *operator->() const { return std::addressof(std::get<Edge>(*ptr_)); }
+      const Edge *operator->() const {
+        return std::addressof(std::get<Edge>(*ptr_));
+      }
     };
 
     const Graph &graph_;
@@ -311,9 +314,7 @@ public:
       line.resize(table_cols_num, 0u);
     }
 
-    for (size_type i = 0; i < vrtx_num_; ++i) {
-      table_[n][i] = i;
-    }
+    std::iota(table_[n].begin(), std::next(table_[n].begin(), vrtx_num_), 0u);
 
     size_type edge_cur = vrtx_num_;
 
