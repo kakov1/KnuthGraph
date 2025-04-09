@@ -1,6 +1,5 @@
 from random import choice, randint
 
-
 edges_number = randint(100, 500)
 start_test_number = int(input("Enter start test number:\n"))
 tests_number = int(input("Enter tests number:\n"))

@@ -4,7 +4,9 @@
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <numeric>
+#include <set>
 #include <stack>
 #include <unordered_map>
 #include <utility>
@@ -22,7 +24,9 @@ private:
   using size_type = std::size_t;
   using table_elem = std::variant<size_type, Vertex, Edge>;
   using graph_table = std::vector<std::vector<table_elem>>;
-  using colors_map = std::unordered_map<size_type, Color>;
+  using colors_map = std::map<size_type, Color>;
+  using edge_pair = std::pair<size_type, size_type>;
+  using edges_vector = std::vector<edge_pair>;
 
 private:
   graph_table table_{4, std::vector<table_elem>{}};
@@ -38,13 +42,13 @@ private:
   enum class Color { White, Blue, Red };
 
   struct Vertex final {
-    size_type num_;
+    size_type pos_, num_;
     VrtxT data_;
 
-    explicit Vertex(size_type num, const VrtxT &data = VrtxT{})
-        : num_(num), data_(data) {}
+    explicit Vertex(size_type pos, size_type num, const VrtxT &data = VrtxT{})
+        : pos_(pos), num_(num), data_(data) {}
 
-    std::string to_string() const { return std::to_string(num_); }
+    std::string to_string() const { return std::to_string(pos_); }
   };
 
   struct Edge final {
@@ -165,13 +169,15 @@ private:
 
 private:
   template <typename EdgeIt>
-  size_type find_max_vrtx(EdgeIt start_edge, EdgeIt end_edge) const {
-    auto max_value = std::max_element(
-        start_edge, end_edge, [](const auto &a, const auto &b) {
-          return std::max(a.first, a.second) < std::max(b.first, b.second);
-        });
+  size_type find_vrtx_num(EdgeIt start, EdgeIt end) const {
+    std::set<size_type> vrtcs;
 
-    return std::max(max_value->first, max_value->second);
+    for (; start != end; ++start) {
+      vrtcs.insert(start->first);
+      vrtcs.insert(start->second);
+    }
+
+    return vrtcs.size();
   }
 
   size_type find_place_for_new_edge(size_type pos) const {
@@ -183,9 +189,15 @@ private:
     return cur;
   }
 
-  void add_new_vrtx(size_type pos) {
-    if (table_[a][pos - 1].index() == 0)
-      table_[a][pos - 1] = Vertex{pos};
+  size_type add_new_vrtx(size_type vrtx,
+                         std::unordered_map<size_type, size_type> &vrtcs) {
+    if (vrtcs.find(vrtx) == vrtcs.end()) {
+      auto pos = vrtcs.size();
+      vrtcs[vrtx] = pos;
+      table_[a][pos] = Vertex{pos, vrtx};
+    }
+
+    return vrtcs[vrtx];
   }
 
   void add_new_edge(size_type pos, size_type start, size_type end,
@@ -228,6 +240,15 @@ private:
     }
   }
 
+  template <typename EdgeIt> void sort_edges(EdgeIt start, EdgeIt end) const {
+    std::for_each(start, end, [](edge_pair &edge) {
+      if (edge.first > edge.second)
+        std::swap(edge.first, edge.second);
+    });
+
+    std::sort(start, end);
+  }
+
   bool dfs(size_type vrtx, colors_map &colors) const {
     std::stack<std::pair<size_type, GraphIt>> stack;
     stack.emplace(vrtx, GraphIt{*this, std::get<size_type>(table_[n][vrtx])});
@@ -236,6 +257,7 @@ private:
 
     while (!stack.empty()) {
       size_type cur_vrtx = stack.top().first;
+
       GraphIt *outgoing_edge = &stack.top().second;
       if (*outgoing_edge == end() || (*outgoing_edge)->start_ - 1 != cur_vrtx)
         stack.pop();
@@ -306,8 +328,14 @@ public:
   template <typename EdgeIt, typename DataIt>
   Graph(EdgeIt start_edge, EdgeIt end_edge, DataIt start_data,
         DataIt end_data) {
-    edge_num_ = end_edge - start_edge;
-    vrtx_num_ = find_max_vrtx(start_edge, end_edge);
+    edges_vector edges = std::vector<edge_pair>{start_edge, end_edge};
+    sort_edges(edges.begin(), edges.end());
+
+    auto start = edges.begin();
+    auto end = edges.end();
+
+    edge_num_ = end - start;
+    vrtx_num_ = find_vrtx_num(start, end);
     table_cols_num = vrtx_num_ + edge_num_ * edge_table_size_;
 
     for (auto &&line : table_) {
@@ -317,18 +345,18 @@ public:
     std::iota(table_[n].begin(), std::next(table_[n].begin(), vrtx_num_), 0u);
 
     size_type edge_cur = vrtx_num_;
+    std::unordered_map<size_type, size_type> vrtcs;
 
-    for (; start_edge != end_edge;
-         ++start_edge, ++start_data, edge_cur += edge_table_size_) {
-      auto [start_num, end_num] = *start_edge;
+    for (; start != end; ++start, ++start_data, edge_cur += edge_table_size_) {
+      auto [start_num, end_num] = *start;
 
-      add_new_vrtx(start_num);
-      add_new_vrtx(end_num);
+      auto start_pos = add_new_vrtx(start_num, vrtcs);
+      auto end_pos = add_new_vrtx(end_num, vrtcs);
 
-      add_new_edge(edge_cur, start_num, end_num, *start_data);
+      add_new_edge(edge_cur, start_pos + 1, end_pos + 1, *start_data);
 
-      set_new_refs(start_num, edge_cur);
-      set_new_refs(end_num, edge_cur + 1);
+      set_new_refs(start_pos + 1, edge_cur);
+      set_new_refs(end_pos + 1, edge_cur + 1);
     }
 
     set_reverse_orders();
@@ -342,20 +370,25 @@ public:
     }
 
     std::string ans;
+    colors_map colors_num;
 
     if (dfs(0, colors)) {
-      for (size_type key = 1; key <= vrtx_num_; ++key) {
-        if (colors[key - 1] != Color::White) {
-          ans += std::to_string(key) + " ";
+      for (size_type key = 0; key < vrtx_num_; ++key) {
+        colors_num[std::get<Vertex>(table_[a][key]).num_] = colors[key];
+      }
 
-          if (colors[key - 1] == Color::Blue) {
-            ans += "b ";
-          } else {
-            ans += "r ";
-          }
+      for (auto &&[vrtx, color] : colors_num) {
+        ans += std::to_string(vrtx) + " ";
+
+        if (color == Color::Blue) {
+          ans += "b ";
+        } else {
+          ans += "r ";
         }
       }
-    } else {
+    }
+
+    else {
       ans = "Isn't bipartite";
     }
 
