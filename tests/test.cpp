@@ -20,7 +20,6 @@ protected:
     test_file.exceptions(std::ifstream::badbit);
 
     std::vector<std::pair<size_type, size_type>> edges;
-    std::vector<int> data;
 
     size_type start, end;
     int value;
@@ -45,10 +44,9 @@ protected:
       value = std::stoi(token);
 
       edges.emplace_back(start, end);
-      data.emplace_back(value);
     }
 
-    Graph<int, int> graph{edges.begin(), edges.end(), data.begin(), data.end()};
+    Graph<int, int> graph{edges.begin(), edges.end()};
 
     return graph.is_bipartite();
   }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <initializer_list>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -200,10 +201,9 @@ private:
     return vrtcs[vrtx];
   }
 
-  void add_new_edge(size_type pos, size_type start, size_type end,
-                    const EdgeT &data) {
-    table_[a][pos] = Edge{pos, start, end, data};
-    table_[a][pos + 1] = Edge{pos + 1, end, start, data};
+  void add_new_edge(size_type pos, size_type start, size_type end) {
+    table_[a][pos] = Edge{pos, start, end};
+    table_[a][pos + 1] = Edge{pos + 1, end, start};
 
     table_[t][pos] = start;
     table_[t][pos + 1] = end;
@@ -325,9 +325,10 @@ private:
   }
 
 public:
-  template <typename EdgeIt, typename DataIt>
-  Graph(EdgeIt start_edge, EdgeIt end_edge, DataIt start_data,
-        DataIt end_data) {
+  Graph(std::initializer_list<edge_pair> list)
+      : Graph(list.begin(), list.end()) {}
+
+  template <typename EdgeIt> Graph(EdgeIt start_edge, EdgeIt end_edge) {
     edges_vector edges = std::vector<edge_pair>{start_edge, end_edge};
     sort_edges(edges.begin(), edges.end());
 
@@ -347,13 +348,13 @@ public:
     size_type edge_cur = vrtx_num_;
     std::unordered_map<size_type, size_type> vrtcs;
 
-    for (; start != end; ++start, ++start_data, edge_cur += edge_table_size_) {
+    for (; start != end; ++start, edge_cur += edge_table_size_) {
       auto [start_num, end_num] = *start;
 
       auto start_pos = add_new_vrtx(start_num, vrtcs);
       auto end_pos = add_new_vrtx(end_num, vrtcs);
 
-      add_new_edge(edge_cur, start_pos + 1, end_pos + 1, *start_data);
+      add_new_edge(edge_cur, start_pos + 1, end_pos + 1);
 
       set_new_refs(start_pos + 1, edge_cur);
       set_new_refs(end_pos + 1, edge_cur + 1);
